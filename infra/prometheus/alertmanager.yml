@@ -1,0 +1,15 @@
+route:
+  receiver: "self-healing-engine"
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 5m
+  routes:
+    - match:
+        severity: critical
+      repeat_interval: 2m
+
+receivers:
+  - name: "self-healing-engine"
+    webhook_configs:
+      - url: "http://engine-api:8000/webhook/alertmanager"
+        send_resolved: true

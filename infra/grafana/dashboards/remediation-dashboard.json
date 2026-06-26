@@ -1,0 +1,155 @@
+{
+  "title": "Remediation Dashboard",
+  "uid": "self-healing-remediation",
+  "version": 1,
+  "tags": ["remediation", "self-healing"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Alerts Received",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(engine_alerts_received_total)",
+          "legendFormat": "Total Alerts"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Actions Triggered",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(engine_actions_triggered_total)",
+          "legendFormat": "Total Actions"
+        }
+      ],
+      "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Action Success Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(engine_actions_triggered_total{status=\"success\"}) / sum(engine_actions_triggered_total) * 100",
+          "legendFormat": "Success Rate"
+        }
+      ],
+      "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Actions by Type (24h)",
+      "type": "barchart",
+      "targets": [
+        {
+          "expr": "sum by (action) (increase(engine_actions_triggered_total[24h]))",
+          "legendFormat": "{{action}}"
+        }
+      ],
+      "gridPos": {"x": 12, "y": 0, "w": 8, "h": 8}
+    },
+    {
+      "id": 5,
+      "title": "Actions by Status (24h)",
+      "type": "piechart",
+      "targets": [
+        {
+          "expr": "sum by (status) (increase(engine_actions_triggered_total[24h]))",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 4, "w": 6, "h": 8},
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "pieType": "pie"
+      }
+    },
+    {
+      "id": 6,
+      "title": "Processing Duration by Failure Type",
+      "type": "heatmap",
+      "targets": [
+        {
+          "expr": "rate(engine_processing_duration_seconds_sum[5m]) / rate(engine_processing_duration_seconds_count[5m])",
+          "legendFormat": "Avg {{failure_type}}"
+        }
+      ],
+      "gridPos": {"x": 6, "y": 4, "w": 10, "h": 8}
+    },
+    {
+      "id": 7,
+      "title": "Alert Rate (5m)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(engine_alerts_received_total[5m])",
+          "legendFormat": "Alerts/s"
+        }
+      ],
+      "gridPos": {"x": 0, "y": 12, "w": 8, "h": 6},
+      "options": {
+        "legend": {"calcs": ["mean", "max"], "displayMode": "table"}
+      }
+    },
+    {
+      "id": 8,
+      "title": "Action Trigger Rate (5m)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(engine_actions_triggered_total[5m])",
+          "legendFormat": "Actions/s"
+        }
+      ],
+      "gridPos": {"x": 8, "y": 12, "w": 8, "h": 6},
+      "options": {
+        "legend": {"calcs": ["mean", "max"], "displayMode": "table"}
+      }
+    },
+    {
+      "id": 9,
+      "title": "Recent Audit Log",
+      "type": "table",
+      "targets": [
+        {
+          "expr": "engine_actions_triggered_total",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "gridPos": {"x": 0, "y": 18, "w": 16, "h": 6},
+      "transformations": [
+        {"id": "seriesToColumns"},
+        {"id": "organize", "options": {"indexByName": {}, "excludeByName": {}}}
+      ]
+    }
+  ],
+  "schemaVersion": 39
+}

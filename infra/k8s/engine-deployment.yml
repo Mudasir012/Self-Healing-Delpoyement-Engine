@@ -1,0 +1,195 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: engine-config
+  namespace: self-healing
+data:
+  rules.yaml: |
+    rules:
+      - condition: crash_loop
+        action: restart_pod
+        cooldown: 300
+        approval_required: false
+
+      - condition: high_memory
+        action: scale_up
+        params:
+          replicas_increase: 2
+        cooldown: 600
+        approval_required: true
+
+      - condition: high_latency
+        action: scale_up
+        params:
+          replicas_increase: 1
+        cooldown: 300
+        approval_required: false
+
+      - condition: bad_deployment
+        action: rollback
+        cooldown: 0
+        approval_required: true
+
+      - condition: disk_full
+        action: disk_cleanup
+        cooldown: 3600
+        approval_required: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: engine-api
+  namespace: self-healing
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: engine-api
+  template:
+    metadata:
+      labels:
+        app: engine-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      serviceAccountName: engine-sa
+      containers:
+        - name: api
+          image: self-healing-engine:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              value: postgresql://remediator:remediator@postgres:5432/self_healing
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: K8S_IN_CLUSTER
+              value: "true"
+            - name: LOG_LEVEL
+              value: INFO
+            - name: RULES_PATH
+              value: /app/config/rules.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: engine-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  namespace: self-healing
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: celery-worker
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+    spec:
+      serviceAccountName: engine-sa
+      containers:
+        - name: worker
+          image: self-healing-engine:latest
+          imagePullPolicy: IfNotPresent
+          command: ["celery", "-A", "app.tasks", "worker", "--loglevel=info", "--concurrency=4"]
+          env:
+            - name: DATABASE_URL
+              value: postgresql://remediator:remediator@postgres:5432/self_healing
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: K8S_IN_CLUSTER
+              value: "true"
+            - name: LOG_LEVEL
+              value: INFO
+            - name: RULES_PATH
+              value: /app/config/rules.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1
+              memory: 1Gi
+      volumes:
+        - name: config
+          configMap:
+            name: engine-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: engine-api
+  namespace: self-healing
+spec:
+  selector:
+    app: engine-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: engine-sa
+  namespace: self-healing
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: engine-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/exec"]
+    verbs: ["get", "list", "watch", "delete", "create"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: engine-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: engine-sa
+    namespace: self-healing
+roleRef:
+  kind: ClusterRole
+  name: engine-role
+  apiGroup: rbac.authorization.k8s.io

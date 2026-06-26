@@ -1,0 +1,75 @@
+groups:
+  - name: deployment_health
+    interval: 30s
+
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[2m]))
+          /
+          sum(rate(http_requests_total[2m])) * 100 > 5
+        for: 2m
+        labels:
+          severity: critical
+          failure_type: bad_deployment
+        annotations:
+          summary: "Error rate {{ $value | humanize }}% for {{ $labels.app }}"
+          description: "HTTP 5xx error rate exceeds 5% threshold for {{ $labels.app }} in {{ $labels.namespace }}"
+
+      - alert: HighMemoryUsage
+        expr: |
+          container_memory_working_set_bytes{container!=""}
+          / on(container) container_spec_memory_limit_bytes{container!=""} * 100 > 85
+        for: 3m
+        labels:
+          severity: warning
+          failure_type: high_memory
+        annotations:
+          summary: "Memory usage {{ $value | humanize }}% on {{ $labels.container }}"
+          description: "Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} exceeds 85% memory"
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[2m])) by (le, app))
+          > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          failure_type: high_latency
+        annotations:
+          summary: "P99 latency {{ $value | humanizeDuration }} for {{ $labels.app }}"
+          description: "P99 latency exceeds 500ms for {{ $labels.app }}"
+
+      - alert: CrashLoopBackOff
+        expr: |
+          sum by (namespace, pod) (kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}) > 0
+        for: 1m
+        labels:
+          severity: critical
+          failure_type: crash_loop
+        annotations:
+          summary: "CrashLoopBackOff for {{ $labels.pod }}"
+          description: "Pod {{ $labels.pod }} in {{ $labels.namespace }} is in CrashLoopBackOff"
+
+      - alert: DiskPressure
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"}
+          / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"} * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          failure_type: disk_full
+        annotations:
+          summary: "Disk space below 10% on {{ $labels.node }}"
+          description: "Node {{ $labels.node }} has less than 10% free disk space"
+
+      - alert: PodRestarting
+        expr: |
+          increase(kube_pod_container_status_restarts_total[5m]) > 3
+        for: 2m
+        labels:
+          severity: warning
+          failure_type: crash_loop
+        annotations:
+          summary: "Pod {{ $labels.pod }} restarting frequently"
+          description: "Pod {{ $labels.pod }} in {{ $labels.namespace }} restarted {{ $value }} times in 5m"

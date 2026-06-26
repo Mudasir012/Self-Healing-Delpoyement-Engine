@@ -1,0 +1,48 @@
+rules:
+  - condition: crash_loop
+    action: restart_pod
+    cooldown: 300
+    approval_required: false
+    description: "Restart the crashing pod — ReplicaSet recreates it"
+
+  - condition: high_memory
+    action: scale_up
+    params:
+      replicas_increase: 2
+    cooldown: 600
+    approval_required: true
+    description: "Scale up deployment by 2 replicas to handle memory pressure"
+
+  - condition: high_latency
+    action: scale_up
+    params:
+      replicas_increase: 1
+    cooldown: 300
+    approval_required: false
+    description: "Scale up by 1 replica to reduce request latency"
+
+  - condition: bad_deployment
+    action: rollback
+    cooldown: 0
+    approval_required: true
+    description: "Rollback to the previous stable revision via Argo CD"
+
+  - condition: disk_full
+    action: disk_cleanup
+    cooldown: 3600
+    approval_required: false
+    description: "Clean up old logs and temporary files on the node"
+
+  - condition: bad_deployment
+    action: scale_down
+    params:
+      replicas_decrease: 1
+    cooldown: 600
+    approval_required: true
+    description: "Scale down deployment to reduce blast radius during rollback"
+
+  - condition: crash_loop
+    action: log_rotation
+    cooldown: 900
+    approval_required: false
+    description: "Rotate application logs to free up disk space"
